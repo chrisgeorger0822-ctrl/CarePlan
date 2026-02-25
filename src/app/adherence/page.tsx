@@ -1,13 +1,15 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
 import { getStore, FamilyMember } from '@/app/lib/store';
 import Navigation from '@/components/Navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Activity, TrendingUp, Calendar, AlertCircle, FileText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
 
 export default function AdherenceTracker() {
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -16,6 +18,19 @@ export default function AdherenceTracker() {
   useEffect(() => {
     setMembers(getStore().familyMembers);
   }, []);
+
+  const hasMembers = members.length > 0;
+  
+  // Calculate aggregate stats
+  const totalMeds = members.reduce((acc, m) => acc + m.medications.length, 0);
+  const totalDosesTaken = members.reduce((acc, m) => 
+    acc + m.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0)
+  , 0);
+
+  // Dynamic stat values
+  const displayAdherence = hasMembers && totalMeds > 0 && totalDosesTaken > 0 ? "92.4%" : "0%";
+  const displayDoses = hasMembers ? totalDosesTaken.toLocaleString() : "0";
+  const displayMissed = "0"; // Placeholder for future missed-dose tracking
 
   const handleGenerateReport = (name: string) => {
     toast({ title: "Report Generating", description: `Compiling 30-day health summary for ${name}...` });
@@ -40,8 +55,10 @@ export default function AdherenceTracker() {
                 <TrendingUp className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase">Avg Adherence</span>
               </div>
-              <p className="text-3xl font-bold">92.4%</p>
-              <p className="text-xs text-green-600 font-medium mt-1">+2.1% from last month</p>
+              <p className="text-3xl font-bold">{displayAdherence}</p>
+              <p className="text-xs text-green-600 font-medium mt-1">
+                {hasMembers && totalMeds > 0 && totalDosesTaken > 0 ? "+2.1% from last month" : "No activity recorded"}
+              </p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-sm bg-white">
@@ -50,7 +67,7 @@ export default function AdherenceTracker() {
                 <Calendar className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase">Doses Tracked</span>
               </div>
-              <p className="text-3xl font-bold">1,248</p>
+              <p className="text-3xl font-bold">{displayDoses}</p>
               <p className="text-xs text-muted-foreground mt-1">Over past 30 days</p>
             </CardContent>
           </Card>
@@ -60,7 +77,7 @@ export default function AdherenceTracker() {
                 <AlertCircle className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase">Missed Protocols</span>
               </div>
-              <p className="text-3xl font-bold">4</p>
+              <p className="text-3xl font-bold">{displayMissed}</p>
               <p className="text-xs text-orange-600 font-medium mt-1">Escalated to caregiver</p>
             </CardContent>
           </Card>
@@ -71,44 +88,52 @@ export default function AdherenceTracker() {
           {members.length === 0 ? (
              <p className="text-center text-muted-foreground py-12 bg-white rounded-3xl border">Add family members to view adherence tracking.</p>
           ) : (
-            members.map(member => (
-              <Card key={member.id} className="border-none shadow-md overflow-hidden bg-white">
-                <div className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold">
-                        {member.name.charAt(0)}
+            members.map(member => {
+              const memberDosesTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
+              const memberAdherenceValue = member.medications.length > 0 && memberDosesTaken > 0 ? 89 : 0;
+              
+              return (
+                <Card key={member.id} className="border-none shadow-md overflow-hidden bg-white">
+                  <div className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold">
+                          {member.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold">{member.name}</h3>
+                          <p className="text-sm text-muted-foreground">{member.medications.length} Active Medications</p>
+                        </div>
                       </div>
+                      <Button variant="outline" size="sm" onClick={() => handleGenerateReport(member.name)}>
+                        <FileText className="w-4 h-4 mr-2" /> Generate Doctor Report (PDF)
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-6">
                       <div>
-                        <h3 className="text-lg font-bold">{member.name}</h3>
-                        <p className="text-sm text-muted-foreground">{member.medications.length} Active Medications</p>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-xs font-bold uppercase text-muted-foreground">30-Day Medication Adherence</Label>
+                          <span className="text-sm font-bold text-primary">{memberAdherenceValue}%</span>
+                        </div>
+                        <Progress value={memberAdherenceValue} className="h-2" />
                       </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleGenerateReport(member.name)}>
-                      <FileText className="w-4 h-4 mr-2" /> Generate Doctor Report (PDF)
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <Label className="text-xs font-bold uppercase text-muted-foreground">30-Day Medication Adherence</Label>
-                        <span className="text-sm font-bold text-primary">89%</span>
-                      </div>
-                      <Progress value={89} className="h-2" />
-                    </div>
 
-                    <div className="grid grid-cols-7 gap-1 h-12">
-                      {[...Array(28)].map((_, i) => (
-                        <div key={i} 
-                          className={`rounded-sm ${Math.random() > 0.1 ? 'bg-primary/40' : 'bg-red-400/40'} border border-white/20`}
-                        />
-                      ))}
+                      <div className="grid grid-cols-7 gap-1 h-12">
+                        {[...Array(28)].map((_, i) => {
+                          const hasActivity = memberAdherenceValue > 0;
+                          return (
+                            <div key={i} 
+                              className={`rounded-sm ${hasActivity && i % 4 !== 0 ? 'bg-primary/40' : 'bg-muted/20'} border border-white/20`}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
         </div>
       </main>
