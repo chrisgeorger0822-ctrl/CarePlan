@@ -12,6 +12,7 @@ export interface Medication {
   pharmacyNumber: string;
   lastTaken?: string;
   startDate: string;
+  reminders: string[]; // Array of times in HH:mm format
 }
 
 export interface FamilyMember {

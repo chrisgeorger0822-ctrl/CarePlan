@@ -20,7 +20,10 @@ import {
   Camera, 
   UserCircle,
   Stethoscope,
-  Activity
+  Activity,
+  Bell,
+  Trash2,
+  Clock
 } from 'lucide-react';
 import { getDrugInteractionAlert } from '@/ai/flows/get-drug-interaction-alert-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -31,25 +34,45 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
   const { toast } = useToast();
   const [member, setMember] = useState<FamilyMember | null>(null);
   const [isAddingMed, setIsAddingMed] = useState(false);
+  const [reminderTime, setReminderTime] = useState('');
   const [newMed, setNewMed] = useState({
     name: '',
     dosage: '',
     frequency: '',
     pillCount: '30',
     pharmacyNumber: '',
+    reminders: [] as string[],
   });
 
   useEffect(() => {
     const store = getStore();
     const found = store.familyMembers.find(m => m.id === id);
     if (found) setMember(found);
+
+    // Check if there was a scanned medication in session storage
+    const scanned = sessionStorage.getItem('scannedMed');
+    if (scanned) {
+      try {
+        const parsed = JSON.parse(scanned);
+        setNewMed(prev => ({
+          ...prev,
+          name: parsed.drugName || '',
+          dosage: parsed.dosage || '',
+          frequency: parsed.frequency || '',
+        }));
+        setIsAddingMed(true);
+        sessionStorage.removeItem('scannedMed');
+      } catch (e) {
+        console.error("Failed to parse scanned med");
+      }
+    }
   }, [id]);
 
   const handleAddMed = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!member) return;
     if (!newMed.name || !newMed.dosage || !newMed.frequency) {
-      alert('Please enter the required contents');
+      toast({ variant: "destructive", title: "Missing Info", description: "Please fill in all required fields." });
       return;
     }
 
@@ -81,12 +104,13 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
       initialCount: parseInt(newMed.pillCount),
       pharmacyNumber: newMed.pharmacyNumber,
       startDate: new Date().toISOString(),
+      reminders: newMed.reminders,
     });
 
     setIsAddingMed(false);
-    setNewMed({ name: '', dosage: '', frequency: '', pillCount: '30', pharmacyNumber: '' });
+    setNewMed({ name: '', dosage: '', frequency: '', pillCount: '30', pharmacyNumber: '', reminders: [] });
     setMember({ ...member }); // Trigger re-render
-    toast({ title: "Successfully entered", description: `${newMed.name} has been added.` });
+    toast({ title: "Medication Added", description: `${newMed.name} and its reminders have been saved.` });
   };
 
   const handleMarkTaken = (medId: string) => {
@@ -94,10 +118,30 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
     const success = markAsTaken(member.id, medId);
     if (success) {
       setMember({ ...member });
-      toast({ title: "Medicine taken on time", description: "Progress updated successfully." });
+      toast({ title: "Dose Logged", description: "Medication intake recorded successfully." });
     } else {
-      toast({ title: "Error", description: "Out of stock or invalid medication." });
+      toast({ variant: "destructive", title: "Error", description: "Check pill count or medication status." });
     }
+  };
+
+  const addReminder = () => {
+    if (!reminderTime) return;
+    if (newMed.reminders.includes(reminderTime)) {
+      toast({ title: "Duplicate Reminder", description: "This time is already set." });
+      return;
+    }
+    setNewMed(prev => ({
+      ...prev,
+      reminders: [...prev.reminders, reminderTime].sort()
+    }));
+    setReminderTime('');
+  };
+
+  const removeReminder = (time: string) => {
+    setNewMed(prev => ({
+      ...prev,
+      reminders: prev.reminders.filter(t => t !== time)
+    }));
   };
 
   if (!member) return null;
@@ -187,24 +231,24 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {isAddingMed && (
-                  <Card className="border-2 border-primary/20 bg-primary/5">
+                  <Card className="border-2 border-primary/20 bg-primary/5 shadow-xl">
                     <CardHeader>
                       <CardTitle className="text-lg">New Medication Entry</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-6">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Drug Name</Label>
+                          <Label>Drug Name *</Label>
                           <Input value={newMed.name} onChange={e => setNewMed({...newMed, name: e.target.value})} placeholder="e.g. Lisinopril" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Dosage</Label>
+                          <Label>Dosage *</Label>
                           <Input value={newMed.dosage} onChange={e => setNewMed({...newMed, dosage: e.target.value})} placeholder="e.g. 10mg" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Frequency</Label>
+                          <Label>Frequency *</Label>
                           <Input value={newMed.frequency} onChange={e => setNewMed({...newMed, frequency: e.target.value})} placeholder="e.g. Once daily" />
                         </div>
                         <div className="space-y-2">
@@ -212,8 +256,28 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                           <Input type="number" value={newMed.pillCount} onChange={e => setNewMed({...newMed, pillCount: e.target.value})} />
                         </div>
                       </div>
+
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2"><Bell className="w-4 h-4 text-primary" /> Daily Reminders</Label>
+                        <div className="flex gap-2">
+                          <Input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} className="w-auto" />
+                          <Button type="button" variant="secondary" onClick={addReminder}><Plus className="w-4 h-4 mr-2" /> Add Time</Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {newMed.reminders.map(time => (
+                            <Badge key={time} variant="secondary" className="px-3 py-1 flex items-center gap-2 text-sm bg-white border shadow-sm">
+                              <Clock className="w-3 h-3 text-primary" /> {time}
+                              <button onClick={() => removeReminder(time)} className="text-muted-foreground hover:text-destructive transition-colors">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                          {newMed.reminders.length === 0 && <p className="text-xs text-muted-foreground italic">No specific reminder times set yet.</p>}
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
-                        <Label>Pharmacy Number</Label>
+                        <Label>Pharmacy Number (for refills)</Label>
                         <Input value={newMed.pharmacyNumber} onChange={e => setNewMed({...newMed, pharmacyNumber: e.target.value})} placeholder="+1 555-555-0199" />
                       </div>
                     </CardContent>
@@ -232,7 +296,7 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                   ) : (
                     member.medications.map(med => (
                       <Card key={med.id} className="border-none shadow-sm hover:shadow-md transition-all">
-                        <CardContent className="p-5 flex items-center justify-between">
+                        <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                               <Pill className="w-6 h-6" />
@@ -240,7 +304,8 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                             <div>
                               <h4 className="font-bold text-lg">{med.name}</h4>
                               <p className="text-sm text-muted-foreground">{med.dosage} • {med.frequency}</p>
-                              <div className="mt-1 flex items-center gap-2">
+                              
+                              <div className="mt-2 flex flex-wrap items-center gap-3">
                                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${med.pillCount < 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                   {med.pillCount} left
                                 </span>
@@ -250,9 +315,19 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                                   </span>
                                 )}
                               </div>
+
+                              {med.reminders && med.reminders.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {med.reminders.map(time => (
+                                    <span key={time} className="inline-flex items-center text-[10px] font-bold bg-primary/5 text-primary px-2 py-0.5 rounded border border-primary/10">
+                                      <Bell className="w-2.5 h-2.5 mr-1" /> {time}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 self-end md:self-center">
                             <Button size="sm" onClick={() => handleMarkTaken(med.id)} className="bg-accent hover:bg-accent/90">
                               Mark Taken
                             </Button>
