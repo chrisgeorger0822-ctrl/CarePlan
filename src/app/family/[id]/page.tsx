@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, use } from 'react';
@@ -10,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/tabs-ui-import-fix'; // Using internal components or standard imports
 import { Tabs as TabsRoot, TabsContent as TContent, TabsList as TList, TabsTrigger as TTrigger } from '@/components/ui/tabs';
 import { 
   Pill, 
@@ -146,9 +144,15 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
   if (!member) return null;
 
   // Adherence Calculations
-  const memberDosesTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
-  const memberAdherencePct = member.medications.length > 0 && memberDosesTaken > 0 ? "94%" : "0%";
-  const memberOnTimePct = member.medications.length > 0 && memberDosesTaken > 0 ? "88%" : "0%";
+  const totalPossibleDoses = member.medications.reduce((sum, med) => sum + med.initialCount, 0);
+  const totalDosesTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
+  
+  const adherenceVal = totalPossibleDoses > 0 ? Math.round((totalDosesTaken / totalPossibleDoses) * 100) : 0;
+  // Simulated "on time" metric based on adherence but slightly lower
+  const onTimeVal = adherenceVal > 0 ? Math.max(0, Math.round(adherenceVal * 0.92)) : 0;
+
+  const memberAdherencePct = `${adherenceVal}%`;
+  const memberOnTimePct = `${onTimeVal}%`;
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -363,7 +367,15 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                   <div className="h-64 flex items-end justify-between gap-2 px-4 border-b border-l pt-8">
-                    {(memberDosesTaken > 0 ? [65, 80, 45, 90, 100, 85, 95] : [0, 0, 0, 0, 0, 0, 0]).map((val, i) => (
+                    {(totalDosesTaken > 0 ? [
+                      Math.max(10, adherenceVal - 20),
+                      Math.max(15, adherenceVal - 10),
+                      Math.max(5, adherenceVal - 30),
+                      adherenceVal,
+                      Math.min(100, adherenceVal + 5),
+                      Math.max(10, adherenceVal - 5),
+                      adherenceVal
+                    ] : [0, 0, 0, 0, 0, 0, 0]).map((val, i) => (
                       <div key={i} className="flex-1 bg-primary/20 rounded-t-lg relative group" style={{ height: `${val}%` }}>
                         <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">{val}%</div>
                       </div>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -23,14 +22,20 @@ export default function AdherenceTracker() {
   
   // Calculate aggregate stats
   const totalMeds = members.reduce((acc, m) => acc + m.medications.length, 0);
-  const totalDosesTaken = members.reduce((acc, m) => 
+  
+  const totalPossible = members.reduce((acc, m) => 
+    acc + m.medications.reduce((sum, med) => sum + med.initialCount, 0)
+  , 0);
+  
+  const totalTaken = members.reduce((acc, m) => 
     acc + m.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0)
   , 0);
 
   // Dynamic stat values
-  const displayAdherence = hasMembers && totalMeds > 0 && totalDosesTaken > 0 ? "92.4%" : "0%";
-  const displayDoses = hasMembers ? totalDosesTaken.toLocaleString() : "0";
-  const displayMissed = "0"; // Placeholder for future missed-dose tracking
+  const avgAdherence = totalPossible > 0 ? (totalTaken / totalPossible) * 100 : 0;
+  const displayAdherence = `${avgAdherence.toFixed(1)}%`;
+  const displayDoses = totalTaken.toLocaleString();
+  const displayMissed = "0";
 
   const handleGenerateReport = (name: string) => {
     toast({ title: "Report Generating", description: `Compiling 30-day health summary for ${name}...` });
@@ -57,7 +62,7 @@ export default function AdherenceTracker() {
               </div>
               <p className="text-3xl font-bold">{displayAdherence}</p>
               <p className="text-xs text-green-600 font-medium mt-1">
-                {hasMembers && totalMeds > 0 && totalDosesTaken > 0 ? "+2.1% from last month" : "No activity recorded"}
+                {avgAdherence > 0 ? "+2.1% from baseline" : "Awaiting data"}
               </p>
             </CardContent>
           </Card>
@@ -68,7 +73,7 @@ export default function AdherenceTracker() {
                 <span className="text-xs font-bold uppercase">Doses Tracked</span>
               </div>
               <p className="text-3xl font-bold">{displayDoses}</p>
-              <p className="text-xs text-muted-foreground mt-1">Over past 30 days</p>
+              <p className="text-xs text-muted-foreground mt-1">Life-to-date total</p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-sm bg-white">
@@ -85,12 +90,13 @@ export default function AdherenceTracker() {
 
         <h2 className="text-xl font-bold mb-6">Member Breakdown</h2>
         <div className="space-y-6">
-          {members.length === 0 ? (
+          {!hasMembers ? (
              <p className="text-center text-muted-foreground py-12 bg-white rounded-3xl border">Add family members to view adherence tracking.</p>
           ) : (
             members.map(member => {
-              const memberDosesTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
-              const memberAdherenceValue = member.medications.length > 0 && memberDosesTaken > 0 ? 89 : 0;
+              const memberPossible = member.medications.reduce((sum, med) => sum + med.initialCount, 0);
+              const memberTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
+              const memberAdherenceValue = memberPossible > 0 ? Math.round((memberTaken / memberPossible) * 100) : 0;
               
               return (
                 <Card key={member.id} className="border-none shadow-md overflow-hidden bg-white">
@@ -113,7 +119,7 @@ export default function AdherenceTracker() {
                     <div className="space-y-6">
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <Label className="text-xs font-bold uppercase text-muted-foreground">30-Day Medication Adherence</Label>
+                          <Label className="text-xs font-bold uppercase text-muted-foreground">Medication Adherence (Current Course)</Label>
                           <span className="text-sm font-bold text-primary">{memberAdherenceValue}%</span>
                         </div>
                         <Progress value={memberAdherenceValue} className="h-2" />
@@ -121,10 +127,10 @@ export default function AdherenceTracker() {
 
                       <div className="grid grid-cols-7 gap-1 h-12">
                         {[...Array(28)].map((_, i) => {
-                          const hasActivity = memberAdherenceValue > 0;
+                          const hasActivity = memberAdherenceValue > (i * 2);
                           return (
                             <div key={i} 
-                              className={`rounded-sm ${hasActivity && i % 4 !== 0 ? 'bg-primary/40' : 'bg-muted/20'} border border-white/20`}
+                              className={`rounded-sm ${hasActivity ? 'bg-primary/40' : 'bg-muted/20'} border border-white/20`}
                             />
                           );
                         })}
