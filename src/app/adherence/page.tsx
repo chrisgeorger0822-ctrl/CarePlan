@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getStore, FamilyMember } from '@/app/lib/store';
 import Navigation from '@/components/Navigation';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,10 +37,6 @@ export default function AdherenceTracker() {
   const displayAdherence = `${avgAdherence.toFixed(1)}%`;
   const displayDoses = totalTaken.toLocaleString();
   const displayMissed = "0";
-
-  const handleGenerateReport = (name: string) => {
-    toast({ title: "Report Generating", description: `Compiling 30-day health summary for ${name}...` });
-  };
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -111,8 +108,10 @@ export default function AdherenceTracker() {
                           <p className="text-sm text-muted-foreground">{member.medications.length} Active Medications</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => handleGenerateReport(member.name)}>
-                        <FileText className="w-4 h-4 mr-2" /> Generate Doctor Report (PDF)
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/family/${member.id}/report`}>
+                          <FileText className="w-4 h-4 mr-2" /> Generate Doctor Report
+                        </Link>
                       </Button>
                     </div>
                     

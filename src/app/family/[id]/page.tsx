@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getStore, FamilyMember, addMedication, markAsTaken } from '@/app/lib/store';
 import Navigation from '@/components/Navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -22,7 +23,8 @@ import {
   Activity,
   Bell,
   Trash2,
-  Clock
+  Clock,
+  FileText
 } from 'lucide-react';
 import { getDrugInteractionAlert } from '@/ai/flows/get-drug-interaction-alert-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -141,6 +143,8 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
     }));
   };
 
+  const formatPhoneForDialing = (phone: string) => phone.replace(/\D/g, '');
+
   if (!member) return null;
 
   // Adherence Calculations
@@ -171,6 +175,11 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                 <p className="text-muted-foreground">{member.age} Years • {member.bloodType}</p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary">Active Patient</Badge>
+                  <Button variant="ghost" size="sm" asChild className="text-xs h-7">
+                    <Link href={`/family/${member.id}/report`}>
+                      <FileText className="w-3 h-3 mr-1" /> View Report
+                    </Link>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -205,7 +214,7 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                 <p className="font-bold">{member.doctorName}</p>
                 <p className="text-sm text-muted-foreground mb-3">{member.doctorContact}</p>
                 <Button variant="outline" size="sm" className="w-full" asChild>
-                  <a href={`tel:${member.doctorContact}`}><Phone className="w-4 h-4 mr-2" /> Call Doctor</a>
+                  <a href={`tel:${formatPhoneForDialing(member.doctorContact)}`}><Phone className="w-4 h-4 mr-2" /> Call Doctor</a>
                 </Button>
               </CardContent>
             </Card>
@@ -335,7 +344,7 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                             </Button>
                             {med.pillCount < 7 && med.pharmacyNumber && (
                               <Button size="sm" variant="outline" className="text-primary border-primary hover:bg-primary/5" asChild>
-                                <a href={`tel:${med.pharmacyNumber}`}><Phone className="w-4 h-4 mr-2" /> Refill</a>
+                                <a href={`tel:${formatPhoneForDialing(med.pharmacyNumber)}`}><Phone className="w-4 h-4 mr-2" /> Refill</a>
                               </Button>
                             )}
                           </div>

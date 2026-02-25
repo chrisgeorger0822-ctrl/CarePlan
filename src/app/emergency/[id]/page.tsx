@@ -17,6 +17,8 @@ export default function EmergencyCard({ params }: { params: Promise<{ id: string
     // In a real app, we'd persist this to IndexedDB here for offline use
   }, [id]);
 
+  const formatPhoneForDialing = (phone: string) => phone.replace(/\D/g, '');
+
   if (!member) return null;
 
   return (
@@ -93,7 +95,7 @@ export default function EmergencyCard({ params }: { params: Promise<{ id: string
                   <p className="text-sm opacity-60">{member.doctorContact}</p>
                 </div>
                 <Button size="lg" className="rounded-full h-14 w-14 bg-green-500 hover:bg-green-600 shadow-lg border-2 border-white" asChild>
-                  <a href={`tel:${member.doctorContact}`}><Phone className="w-6 h-6" /></a>
+                  <a href={`tel:${formatPhoneForDialing(member.doctorContact)}`}><Phone className="w-6 h-6" /></a>
                 </Button>
               </div>
             </div>
