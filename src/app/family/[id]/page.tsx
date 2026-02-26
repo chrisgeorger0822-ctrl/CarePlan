@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, use } from 'react';
@@ -24,7 +25,8 @@ import {
   Bell,
   Trash2,
   Clock,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { getDrugInteractionAlert } from '@/ai/flows/get-drug-interaction-alert-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +37,7 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
   const { toast } = useToast();
   const [member, setMember] = useState<FamilyMember | null>(null);
   const [isAddingMed, setIsAddingMed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [reminderTime, setReminderTime] = useState('');
   const [newMed, setNewMed] = useState({
     name: '',
@@ -45,10 +48,17 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
     reminders: [] as string[],
   });
 
-  useEffect(() => {
+  const refreshMemberData = () => {
     const store = getStore();
     const found = store.familyMembers.find(m => m.id === id);
-    if (found) setMember(found);
+    if (found) {
+      // Force a new object reference to trigger re-render
+      setMember({ ...found, medications: [...found.medications] });
+    }
+  };
+
+  useEffect(() => {
+    refreshMemberData();
 
     const scanned = sessionStorage.getItem('scannedMed');
     if (scanned) {
@@ -76,47 +86,59 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
       return;
     }
 
-    const interactionCheck = await getDrugInteractionAlert({
-      newMedication: {
+    setIsSaving(true);
+    try {
+      const interactionCheck = await getDrugInteractionAlert({
+        newMedication: {
+          name: newMed.name,
+          dosage: newMed.dosage,
+          frequency: newMed.frequency
+        },
+        existingMedications: member.medications.map(m => ({
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency
+        }))
+      });
+
+      if (interactionCheck.hasInteraction) {
+        if (!confirm(`${interactionCheck.warningMessage}\n\nDo you still want to add this medication?`)) {
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      addMedication(member.id, {
         name: newMed.name,
         dosage: newMed.dosage,
-        frequency: newMed.frequency
-      },
-      existingMedications: member.medications.map(m => ({
-        name: m.name,
-        dosage: m.dosage,
-        frequency: m.frequency
-      }))
-    });
+        frequency: newMed.frequency,
+        pillCount: parseInt(newMed.pillCount) || 30,
+        initialCount: parseInt(newMed.pillCount) || 30,
+        pharmacyNumber: newMed.pharmacyNumber,
+        startDate: new Date().toISOString(),
+        reminders: newMed.reminders,
+      });
 
-    if (interactionCheck.hasInteraction) {
-      if (!confirm(`${interactionCheck.warningMessage}\n\nDo you still want to add this medication?`)) {
-        return;
-      }
+      setIsAddingMed(false);
+      setNewMed({ name: '', dosage: '', frequency: '', pillCount: '30', pharmacyNumber: '', reminders: [] });
+      refreshMemberData();
+      toast({ title: "Medication Added", description: `${newMed.name} has been saved.` });
+    } catch (error) {
+      toast({ 
+        variant: "destructive", 
+        title: "Error Saving", 
+        description: "There was a problem checking for interactions or saving the record." 
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    addMedication(member.id, {
-      name: newMed.name,
-      dosage: newMed.dosage,
-      frequency: newMed.frequency,
-      pillCount: parseInt(newMed.pillCount),
-      initialCount: parseInt(newMed.pillCount),
-      pharmacyNumber: newMed.pharmacyNumber,
-      startDate: new Date().toISOString(),
-      reminders: newMed.reminders,
-    });
-
-    setIsAddingMed(false);
-    setNewMed({ name: '', dosage: '', frequency: '', pillCount: '30', pharmacyNumber: '', reminders: [] });
-    setMember({ ...member });
-    toast({ title: "Medication Added", description: `${newMed.name} has been saved.` });
   };
 
   const handleMarkTaken = (medId: string) => {
     if (!member) return;
     const success = markAsTaken(member.id, medId);
     if (success) {
-      setMember({ ...member });
+      refreshMemberData();
       toast({ title: "Dose Logged", description: "Medication intake recorded successfully." });
     } else {
       toast({ variant: "destructive", title: "Error", description: "Check pill count or medication status." });
@@ -152,7 +174,6 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
   const totalDosesTaken = member.medications.reduce((sum, med) => sum + (med.initialCount - med.pillCount), 0);
   
   const adherenceVal = totalPossibleDoses > 0 ? Math.round((totalDosesTaken / totalPossibleDoses) * 100) : 0;
-  // Simulated "on time" metric based on adherence but slightly lower
   const onTimeVal = adherenceVal > 0 ? Math.max(0, Math.round(adherenceVal * 0.92)) : 0;
 
   const memberAdherencePct = `${adherenceVal}%`;
@@ -253,35 +274,35 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Drug Name *</Label>
-                          <Input value={newMed.name} onChange={e => setNewMed({...newMed, name: e.target.value})} placeholder="e.g. Lisinopril" />
+                          <Input value={newMed.name} onChange={e => setNewMed({...newMed, name: e.target.value})} placeholder="e.g. Lisinopril" disabled={isSaving} />
                         </div>
                         <div className="space-y-2">
                           <Label>Dosage *</Label>
-                          <Input value={newMed.dosage} onChange={e => setNewMed({...newMed, dosage: e.target.value})} placeholder="e.g. 10mg" />
+                          <Input value={newMed.dosage} onChange={e => setNewMed({...newMed, dosage: e.target.value})} placeholder="e.g. 10mg" disabled={isSaving} />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Frequency *</Label>
-                          <Input value={newMed.frequency} onChange={e => setNewMed({...newMed, frequency: e.target.value})} placeholder="e.g. Once daily" />
+                          <Input value={newMed.frequency} onChange={e => setNewMed({...newMed, frequency: e.target.value})} placeholder="e.g. Once daily" disabled={isSaving} />
                         </div>
                         <div className="space-y-2">
                           <Label>Pill Count</Label>
-                          <Input type="number" value={newMed.pillCount} onChange={e => setNewMed({...newMed, pillCount: e.target.value})} />
+                          <Input type="number" value={newMed.pillCount} onChange={e => setNewMed({...newMed, pillCount: e.target.value})} disabled={isSaving} />
                         </div>
                       </div>
 
                       <div className="space-y-3">
                         <Label className="flex items-center gap-2"><Bell className="w-4 h-4 text-primary" /> Daily Reminders</Label>
                         <div className="flex gap-2">
-                          <Input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} className="w-auto" />
-                          <Button type="button" variant="secondary" onClick={addReminder}><Plus className="w-4 h-4 mr-2" /> Add Time</Button>
+                          <Input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} className="w-auto" disabled={isSaving} />
+                          <Button type="button" variant="secondary" onClick={addReminder} disabled={isSaving}><Plus className="w-4 h-4 mr-2" /> Add Time</Button>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {newMed.reminders.map(time => (
                             <Badge key={time} variant="secondary" className="px-3 py-1 flex items-center gap-2 text-sm bg-white border shadow-sm">
                               <Clock className="w-3 h-3 text-primary" /> {time}
-                              <button onClick={() => removeReminder(time)} className="text-muted-foreground hover:text-destructive transition-colors">
+                              <button onClick={() => removeReminder(time)} disabled={isSaving} className="text-muted-foreground hover:text-destructive transition-colors">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </Badge>
@@ -291,12 +312,14 @@ export default function MemberDashboard({ params }: { params: Promise<{ id: stri
 
                       <div className="space-y-2">
                         <Label>Pharmacy Number (for refills)</Label>
-                        <Input value={newMed.pharmacyNumber} onChange={e => setNewMed({...newMed, pharmacyNumber: e.target.value})} placeholder="+1 555-555-0199" />
+                        <Input value={newMed.pharmacyNumber} onChange={e => setNewMed({...newMed, pharmacyNumber: e.target.value})} placeholder="+1 555-555-0199" disabled={isSaving} />
                       </div>
                     </CardContent>
                     <CardFooter className="flex gap-2">
-                      <Button onClick={handleAddMed} className="flex-1">Save Prescription</Button>
-                      <Button variant="ghost" onClick={() => setIsAddingMed(false)}>Cancel</Button>
+                      <Button onClick={handleAddMed} className="flex-1" disabled={isSaving}>
+                        {isSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : 'Save Prescription'}
+                      </Button>
+                      <Button variant="ghost" onClick={() => setIsAddingMed(false)} disabled={isSaving}>Cancel</Button>
                     </CardFooter>
                   </Card>
                 )}
